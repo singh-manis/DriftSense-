@@ -1,0 +1,37 @@
+# Security: Ignore environment variables and secrets
+.env
+config.py
+
+# Python: Ignore compiled files and cache
+__pycache__/
+*.pyc
+
+# Virtual Environment: Ignore the library folder
+venv/
+env/
+.venv/
+
+# Data: Ignore user uploads (but keep the folder structure)
+uploads/*
+!uploads/.gitkeep
+
+# Large Datasets
+*.csv
+*.xes
+*.xlsx
+*.zip
+*.7z
+*.rar
+
+# Specific large files
+BPI Challenge 2017.csv
+incident_event_log.csv
+bpi_log.csv.xes
+
+# Keep small test data
+!test_log.csv
+!converted_data.csv
+
+# IDE: Ignore VS Code / PyCharm settings
+.vscode/
+.idea/

@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DriftSense - Drift Detection Dashboard</title>
+  <!-- Google Fonts: Outfit (Headings) & Inter (Body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;700;800&display=swap"
+    rel="stylesheet">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+  <div class="sidebar">
+    <div class="brand">
+      <div class="logo-circle">DS</div>
+      <div>
+        <h2 style="margin: 0; font-size: 18px">DriftSense</h2>
+        <small style="color: #565f89">Concept Drift</small>
+      </div>
+    </div>
+
+    <ul class="nav-links">
+      <li class="active" onclick="showSection('dashboard', this)">
+        <span>📊</span> Dashboard
+      </li>
+      <li onclick="showSection('guide', this)">
+        <span>⚙️</span> Operational Workflow & User Guide
+      </li>
+      <li onclick="showSection('datasets', this)">
+        <span>📂</span> Sample Datasets
+      </li>
+      <li onclick="showSection('team', this)">
+        <span>👥</span> Team Information
+      </li>
+      <li onclick="showSection('version', this)">
+        <span>⚙️</span> Version Info
+      </li>
+    </ul>
+  </div>
+
+  <div class="main-content">
+    <button id="themeToggle" class="theme-btn" onclick="toggleTheme()" title="Toggle Theme">
+      <span id="themeIcon">🌞</span>
+    </button>
+    <div id="dashboard-section">
+      <header>
+        <h1>Drift Detection Dashboard</h1>
+        <p>
+          Upload a dataset (CSV) to analyze reconstruction-like errors and
+          detect concept drift.
+        </p>
+      </header>
+
+      <div class="controls">
+        <input type="file" id="csvFile" accept=".csv, .xlsx, .xls" />
+        <button onclick="uploadAndAnalyze()" class="btn-primary">
+          Analyze
+        </button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="card">
+          <h3>Detected Format</h3>
+          <p>CSV</p>
+          <small>Auto-detected by backend</small>
+        </div>
+        <div class="card">
+          <h3>Total Traces</h3>
+          <p id="totalTraces">-</p>
+          <small>Rows analyzed</small>
+        </div>
+        <div class="card">
+          <h3>Drift Points</h3>
+          <p id="driftCount" class="highlight">-</p>
+          <small>Above-Threshold indices</small>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <h3>Reconstruction Error</h3>
+        <canvas id="reconstructionChart"></canvas>
+      </div>
+
+      <div class="chart-container" style="margin-top: 20px">
+        <h3 style="margin-bottom: 15px">Drift Summary</h3>
+        <div class="summary-stats-grid">
+          <div class="stat-item">
+            <span class="stat-label">Threshold</span><span class="stat-value" id="stat-threshold">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Mode</span><span class="stat-value" id="stat-mode">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Engine</span><span class="stat-value" id="stat-engine">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Max Error</span><span class="stat-value" id="stat-max">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Mean Error</span><span class="stat-value" id="stat-mean">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Std Dev</span><span class="stat-value" id="stat-std">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Precision</span><span class="stat-value" id="stat-precision"
+              style="color:#2ac3de">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Recall</span><span class="stat-value" id="stat-recall"
+              style="color:#f7768e">-</span>
+          </div>
+        </div>
+        <div style="margin: 15px 0 5px 0; color: #94a3b8; font-size: 0.9em">
+          Indices
+        </div>
+        <div id="indices-container" class="indices-grid collapsed"></div>
+        <button id="toggleIndicesBtn" class="btn-toggle" onclick="toggleIndices()" style="display: none">
+          Show More
+        </button>
+      </div>
+
+      <div class="chart-container">
+        <h3>Error Distribution (Histogram)</h3>
+        <canvas id="histogramChart"></canvas>
+      </div>
+    </div>
+
+    <div id="guide-section" style="display: none">
+      <div class="guide-header">
+        <h1>🌐 Operational Workflow & User Guide</h1>
+        <p>
+          Follow this simple guided process to perform concept drift detection
+          and localization in event logs. Each stage blends automation,
+          intelligence, and explainability. 💡
+        </p>
+      </div>
+
+      <div class="guide-steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h3>Upload Your Event Log</h3>
+            <p>
+              📤 Upload your dataset in supported formats —
+              <strong>XES or CSV</strong>. You may drag & drop the file or
+              choose it from your system.
+            </p>
+            <p class="sub-text">The system automatically:</p>
+            <ul class="guide-list">
+              <li>Detects the file format</li>
+              <li>Extracts traces, activities, and timestamps</li>
+              <li>
+                Performs preprocessing (sorting, cleaning, trace encoding)
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3>Initialize Drift Analysis</h3>
+            <p>
+              ⚙ Click the <strong>Analyze</strong> button to start the drift
+              detection pipeline.
+            </p>
+            <p class="sub-text">Depending on the model, the backend will:</p>
+            <ul class="guide-list">
+              <li>Generate sliding windows</li>
+              <li>Build bigram-based control-flow representations</li>
+              <li>Compute Negative Log-Likelihood (NLL) scores</li>
+              <li>
+                Apply Page-Hinkley / Statistical / Neural models to detect
+                drifts
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3>Interpret the Drift Graphs</h3>
+            <p>📊 In the graph panel, observe:</p>
+            <ul class="guide-list">
+              <li>
+                <strong>🔹 NLL Drift Curve:</strong> Red markers indicate
+                detected drift points. Hover to view exact window & error
+                values.
+              </li>
+              <li>
+                <strong>🔹 Error Distribution:</strong> Understand how process
+                behaviour changes and identify spikes indicating abnormal
+                transitions.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h3>Explore Drift Localization</h3>
+            <p>
+              🧭 Switch to the localization analytics to find
+              <strong>which activities changed</strong>.
+            </p>
+            <p class="sub-text">The dashboard provides:</p>
+            <ul class="guide-list">
+              <li>Top Changed Activities Bar Chart</li>
+              <li>Heatmap of Activity Frequency Before vs After Drift</li>
+              <li>Trace Variant Distribution (if enabled)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <h3>Visualize Control Flow (Optional)</h3>
+            <p>🔀 View the process behaviour before and after drift using:</p>
+            <ul class="guide-list">
+              <li>Directly-Follows Graph (DFG)</li>
+              <li>Activity Transition Graph</li>
+              <li>Before/After Path Comparison</li>
+            </ul>
+            <p class="sub-text">
+              This helps reveal structural deviations in the workflow.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">6</div>
+          <div class="step-content">
+            <h3>View Explainable AI Insights</h3>
+            <p>
+              🧠 If using a Neural Model, access interpretability features:
+            </p>
+            <ul class="guide-list">
+              <li>Attention heatmap</li>
+              <li>Sequence importance plot</li>
+              <li>Contribution scores & Reconstruction comparison</li>
+            </ul>
+            <p class="sub-text">
+              These insights explain <em>why</em> the model detected drift.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">7</div>
+          <div class="step-content">
+            <h3>Review Previous Analyses</h3>
+            <p>
+              📁 You can revisit earlier results anytime. The system
+              automatically saves drift curves, threshold values, localization
+              results, and drift indices.
+            </p>
+            <p class="sub-text">
+              Reload past sessions to compare behaviour over time.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">8</div>
+          <div class="step-content">
+            <h3>Export Results</h3>
+            <p>
+              📄 Export your drift analysis results for documentation or
+              presentations:
+            </p>
+            <ul class="guide-list">
+              <li><strong>PNG:</strong> Graphs and visual plots</li>
+              <li><strong>CSV / JSON:</strong> Drift indices + metrics</li>
+              <li><strong>PDF:</strong> Summary report</li>
+            </ul>
+          </div>
+        </div>
+        <div class="guide-footer">
+          <p class="footer-quote">
+            💫 "Drift is not just noise; it is the heartbeat of evolving data
+            — DriftSense makes you listen." 💫
+          </p>
+
+          <p class="guided-by">
+            Guided by: <span class="guide-name">Dr. Manoj Kumar MV</span>,
+            Professor, ISE – Nitte Meenakshi Institute of Technology 🎓
+          </p>
+
+          <a href="https://www.linkedin.com/in/manojmv24/" target="_blank" class="linkedin-btn">
+            <span class="linkedin-icon">in</span> LinkedIn
+          </a>
+        </div>
+      </div>
+    </div>
+    <div id="datasets-section" style="display: none">
+      <div class="guide-header">
+        <h1>📚 Sample Datasets</h1>
+        <p>
+          Explore these open-source and real-world event logs to test,
+          visualize, and validate your
+          <strong>Concept Drift Detection & Localization</strong> engine. Each
+          dataset provides unique workflow behaviors and drift patterns. 💡
+        </p>
+      </div>
+
+      <div class="dataset-list">
+        <div class="dataset-item">
+          <div class="dataset-icon">🏥</div>
+          <div class="dataset-content">
+            <h3>BPI Challenge Event Logs (2012–2020)</h3>
+            <p>
+              Industry-standard process mining datasets containing real
+              business workflows.
+            </p>
+            <p class="sub-text">
+              Perfect for analyzing control-flow drift, task changes, and
+              process evolution across different years.
+            </p>
+          </div>
+        </div>
+
+        <div class="dataset-item">
+          <div class="dataset-icon">🧾</div>
+          <div class="dataset-content">
+            <h3>Helpdesk Event Log</h3>
+            <p>
+              Customer support workflow data capturing ticket creation →
+              assignment → solution steps.
+            </p>
+            <p class="sub-text">
+              Ideal for studying seasonal drift, agent behavior changes, and
+              process bottlenecks.
+            </p>
+          </div>
+        </div>
+
+        <div class="dataset-item">
+          <div class="dataset-icon">🛒</div>
+          <div class="dataset-content">
+            <h3>Sepsis Treatment Event Log (Hospital Process)</h3>
+            <p>Medical treatment sequences from emergency admissions.</p>
+            <p class="sub-text">
+              Useful for detecting pathway deviations, protocol drift, and
+              sequence anomalies.
+            </p>
+          </div>
+        </div>
+
+        <div class="dataset-item">
+          <div class="dataset-icon">🚗</div>
+          <div class="dataset-content">
+            <h3>Road Traffic Fine Management Log</h3>
+            <p>
+              Government process dataset showing fine creation → payment →
+              closure.
+            </p>
+            <p class="sub-text">
+              Designed for control-flow drift, new case variants, and policy
+              change detection.
+            </p>
+          </div>
+        </div>
+
+        <div class="dataset-item">
+          <div class="dataset-icon">👤</div>
+          <div class="dataset-content">
+            <h3>Loan Application Event Log (Banking)</h3>
+            <p>
+              Loan approval workflow including document checks, approvals, and
+              rejections.
+            </p>
+            <p class="sub-text">
+              Great for understanding workflow drift due to customer or
+              regulation changes.
+            </p>
+          </div>
+        </div>
+
+        <div class="dataset-item">
+          <div class="dataset-icon">🤖</div>
+          <div class="dataset-content">
+            <h3>Synthetic Drift-Injected Dataset</h3>
+            <p>
+              A simulated dataset with manually introduced drifts in activity
+              order, frequency, and structure.
+            </p>
+            <p class="sub-text">
+              Useful to benchmark and validate your neural network–based drift
+              detection model.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="guide-footer" style="
+            margin-top: 40px;
+            border-top: 1px solid #2f334d;
+            padding-top: 30px;
+          ">
+        <p class="footer-quote" style="color: #2ac3de">
+          “Your drift detection engine performs best on evolving, real-world
+          workflow logs.” 🚀
+        </p>
+      </div>
+    </div>
+    <div id="team-section" style="display: none">
+      <div class="guide-header">
+        <h1 style="color: #2ac3de">
+          👥 Meet the Concept Drift Detection Team
+        </h1>
+        <p>
+          “Innovation through collaboration — where intelligent systems meet
+          evolving processes.” 💡
+        </p>
+      </div>
+
+      <div class="team-content">
+        <div class="team-meta">
+          <p>
+            <strong>Team Name:</strong> 🚀
+            <span style="color: #7aa2f7">Drift Detection</span>
+          </p>
+          <p>
+            <strong>Institution:</strong>
+            <span style="color: #2ac3de">Nitte Meenakshi Institute of Technology</span>
+          </p>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #2f334d; margin: 30px 0" />
+
+        <div class="team-member">
+          <h3 class="member-role role-lead">
+            🌟 Manish Kumar – Project Lead & Backend Developer
+          </h3>
+          <div class="member-desc">
+            <span class="icon">🛠️</span>
+            <p>
+              You led the core architecture, backend pipeline, and drift
+              detection engine. You built the Python / Flask-based backend,
+              implemented XES log parsing, sliding window generation, bigram
+              modeling, NLL computation, and integrated the neural network
+              drift detection modules. Your work ensured seamless end-to-end
+              execution between the backend engine and the dashboard
+              analytics.
+            </p>
+          </div>
+          <a href="https://www.linkedin.com/in/manish-kumar-s07/" target="_blank"
+            class="linkedin-btn-small">LinkedIn</a>
+        </div>
+
+        <div class="team-member">
+          <h3 class="member-role role-frontend">
+            🎨 Ricky Mahto – Frontend Developer & UI Designer
+          </h3>
+          <div class="member-desc">
+            <span class="icon">💻</span>
+            <p>
+              Responsible for designing and developing the interactive user
+              interface of the dashboard. They implemented dynamic graphs,
+              navigation layouts, UI transitions, and created a clean,
+              intuitive, dark-themed analytics panel for drift visualization.
+              Their work ensures a smooth and visually engaging user
+              experience.
+            </p>
+          </div>
+          <a href="https://www.linkedin.com/in/ricky-mahto/" target="_blank" class="linkedin-btn-small">LinkedIn</a>
+        </div>
+
+        <div class="team-member">
+          <h3 class="member-role role-analyst">
+            📊 Mainak Patra – Data Analyst & Documentation Specialist
+          </h3>
+          <div class="member-desc">
+            <span class="icon">📘</span>
+            <p>
+              Handled dataset preprocessing, drift validation, and
+              documentation. They focused on trace extraction, control-flow
+              transformation, and verifying drift outputs using statistical
+              baselines. Their contributions ensured analytical accuracy,
+              clarity, and high-quality documentation throughout the project.
+            </p>
+          </div>
+          <a href="https://www.linkedin.com/in/mainak-patra-94014526a/" target="_blank"
+            class="linkedin-btn-small">LinkedIn</a>
+        </div>
+      </div>
+
+      <div class="guide-footer" style="margin-top: 50px">
+        <p class="guided-by">
+          Guided By: <span class="guide-name">Dr. Manoj Kumar MV</span>,
+          Professor, ISE - Nitte Meenakshi Institute of Technology 🎓
+        </p>
+        <p class="footer-quote" style="color: #2ac3de; margin-top: 10px">
+          “Together we detect, analyze, and evolve — one drift at a time.” 🌍
+        </p>
+      </div>
+    </div>
+    <div id="version-section" style="display: none">
+      <div class="guide-header">
+        <h1 style="color: #2ac3de">🛠️ Version Information</h1>
+        <p>“Advancing process intelligence — one evolution at a time.” ⚙️</p>
+      </div>
+
+      <div class="version-content">
+        <p class="version-highlight">
+          📦 <strong>Version:</strong>
+          <span class="version-number">1.0 – Neural Drift Detection Edition</span>
+        </p>
+
+        <p class="version-desc">
+          🚀 This release introduces a complete
+          <strong>Neural Network–enhanced Concept Drift Detection &
+            Localization</strong>
+          system for event logs in the Control Flow Perspective.
+        </p>
+        <p class="version-desc">
+          The platform integrates XES log parsing, sliding window modeling,
+          bigram representations, NLL-based drift scoring, and visual drift
+          localization analytics into a unified dashboard.
+        </p>
+
+        <hr style="border: 0; border-top: 1px solid #2f334d; margin: 30px 0" />
+
+        <div class="tech-details">
+          <p><strong>Backend:</strong></p>
+          <p class="detail-text">
+            Python + Flask + NumPy + PM4Py, with optional TensorFlow for
+            neural drift models (Autoencoder / LSTM). The engine supports XES
+            and CSV event log inputs, performs activity extraction,
+            window-based encoding, and drift point computation with
+            deterministic results.
+          </p>
+
+          <p><strong>Frontend:</strong></p>
+          <p class="detail-text">
+            HTML + CSS + JavaScript with Chart.js for rendering responsive
+            interactive visualizations — including NLL drift curves,
+            localization bar charts, activity frequency heatmaps, and variant
+            distribution views. Designed with a smooth, modern dark-themed UI
+            for clarity and engagement.
+          </p>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #2f334d; margin: 30px 0" />
+
+        <div class="maintainer-block">
+          <p><strong>Maintainer:</strong> Ricky Mahto</p>
+          <p>
+            <strong>Contact:</strong>
+            <a href="mailto:rickymahto103@gmail.com" class="contact-link">rickymahto103@gmail.com</a>
+          </p>
+        </div>
+
+        <div class="updates-block">
+          <p><strong>Planned Updates:</strong></p>
+          <ul class="guide-list" style="margin-top: 10px">
+            <li>
+              🔹 Integration of attention-based XAI visualizations for
+              enhanced interpretability
+            </li>
+            <li>
+              🔹 Improved drift quantification metrics & adaptive thresholding
+            </li>
+            <li>🔹 Exportable PDF/CSV drift reports</li>
+            <li>
+              🔹 Optional LSTM/Transformer-based drift prediction module
+            </li>
+            <li>
+              🔹 Enhanced dashboard filters and custom time-window controls
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="driftModal" class="modal">
+    <div class="modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 id="modalTitle" style="margin: 0;">Drift Point Analysis</h3>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button onclick="downloadReport()" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">
+            📄 Download Report
+          </button>
+          <span class="close-btn" onclick="closeModal()" style="font-size: 28px; line-height: 20px;">&times;</span>
+        </div>
+      </div>
+
+      <div class="chart-container" style="background: transparent; padding: 0; margin-bottom: 20px">
+        <canvas id="modalChart"></canvas>
+      </div>
+
+      <h3 style="
+            margin-top: 20px;
+            border-top: 1px solid #2f334d;
+            padding-top: 20px;
+          ">
+        🔮 3D Latent Space (Brain Visualization)
+      </h3>
+      <div id="latent3dChart" style="
+            height: 400px;
+            border: 1px solid #2f334d;
+            border-radius: 8px;
+            background: #1a1b26;
+            margin-bottom: 20px;
+          "></div>
+
+      <h3 style="
+            margin-top: 0px;
+            border-top: 1px solid #2f334d;
+            padding-top: 20px;
+          ">
+        🔀 Control Flow Graph (Drift Context)
+      </h3>
+
+      <div id="cfgNetwork" style="
+            height: 300px;
+            border: 1px solid #2f334d;
+            border-radius: 8px;
+            background: #1a1b26;
+          "></div>
+
+      <div class="ai-section" style="
+            margin-top: 25px;
+            border-top: 1px solid #2f334d;
+            padding-top: 20px;
+          ">
+        <div style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 15px;
+            ">
+          <h3 style="margin: 0; color: #c0caf5">✨ Gemini AI Insight</h3>
+          <button onclick="askGemini()" class="btn-gemini">
+            <span>🤖</span> Analyze with Gemini
+          </button>
+        </div>
+
+        <div id="geminiResponse" class="gemini-box" style="display: none">
+          <div class="typing-indicator">Gemini is thinking...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+
+</html>
