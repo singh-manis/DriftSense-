@@ -65,10 +65,10 @@ def analyze_drift(filepath):
         # Load as CSV (Fallback)
         if df is None:
             try:
-                df = pd.read_csv(filepath, sep=None, engine='python', encoding='utf-8', on_bad_lines='skip')
+                df = pd.read_csv(filepath, sep=None, engine='python', encoding='utf-8', on_bad_lines='skip', nrows=10000)
             except Exception:
                 try:
-                    df = pd.read_csv(filepath, sep=None, engine='python', encoding='latin1', on_bad_lines='skip')
+                    df = pd.read_csv(filepath, sep=None, engine='python', encoding='latin1', on_bad_lines='skip', nrows=10000)
                 except Exception as e:
                     return {"error": f"Could not read file. Error: {str(e)}"}
 
@@ -320,12 +320,6 @@ def upload_file():
         if file:
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
             file.save(filepath)
-            
-            # Check file size (limit to 20MB)
-            file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
-            if file_size_mb > 20:
-                os.remove(filepath)
-                return jsonify({'error': f'File too large ({file_size_mb:.1f}MB). Max 20MB allowed. Please use a smaller dataset.'})
             
             result = analyze_drift(filepath)
             
