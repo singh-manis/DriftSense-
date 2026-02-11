@@ -332,7 +332,22 @@ def upload_file():
         if file:
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
             file.save(filepath)
-            return jsonify(analyze_drift(filepath))
+            
+            # Check file size (limit to 2MB for free-tier hosting)
+            file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
+            if file_size_mb > 2:
+                os.remove(filepath)
+                return jsonify({'error': f'File too large ({file_size_mb:.1f}MB). Max 2MB on free hosting. Please use a smaller dataset or sample your data.'})
+            
+            result = analyze_drift(filepath)
+            
+            # Cleanup uploaded file to save disk space
+            try:
+                os.remove(filepath)
+            except:
+                pass
+            
+            return jsonify(result)
     except Exception as e:
         import traceback
         traceback.print_exc()
