@@ -534,61 +534,7 @@ function updateChartColors(isLight) {
     if (typeof histogramChartInstance !== 'undefined') updateChart(histogramChartInstance);
     if (typeof modalChartInstance !== 'undefined') updateChart(modalChartInstance);
 }
-// Add this to the bottom of script.js
 
-function toggleTheme() {
-    const body = document.body;
-    const icon = document.getElementById('themeIcon');
-    const isLight = body.getAttribute('data-theme') === 'light';
-
-    if (isLight) {
-        // Switch to Dark
-        body.removeAttribute('data-theme');
-        if (icon) icon.innerText = '🌞';
-        localStorage.setItem('theme', 'dark');
-        updateChartColors(false); // Dark Mode Colors
-    } else {
-        // Switch to Light
-        body.setAttribute('data-theme', 'light');
-        if (icon) icon.innerText = '🌙';
-        localStorage.setItem('theme', 'light');
-        updateChartColors(true); // Light Mode Colors
-    }
-}
-
-function updateChartColors(isLight) {
-    // 1. Define Colors
-    const gridColor = isLight ? '#e5e5e5' : '#2f334d'; // Grey in light, Dark Blue in dark
-    const textColor = isLight ? '#000000' : '#a9b1d6'; // Black in light, Grey in dark
-
-    // 2. Helper to update a specific chart
-    const applyUpdate = (chart) => {
-        if (chart) {
-            chart.options.scales.x.grid.color = gridColor;
-            chart.options.scales.y.grid.color = gridColor;
-            chart.options.scales.x.ticks.color = textColor;
-            chart.options.scales.y.ticks.color = textColor;
-            // Update Legend/Title colors if you have them
-            if (chart.options.plugins.legend) chart.options.plugins.legend.labels.color = textColor;
-            chart.update();
-        }
-    };
-
-    // 3. Update All Active Charts
-    if (typeof reconstructionChartInstance !== 'undefined') applyUpdate(reconstructionChartInstance);
-    if (typeof histogramChartInstance !== 'undefined') applyUpdate(histogramChartInstance);
-    if (typeof modalChartInstance !== 'undefined') applyUpdate(modalChartInstance);
-}
-
-// Ensure theme loads correctly on refresh
-document.addEventListener('DOMContentLoaded', () => {
-    if (localStorage.getItem('theme') === 'light') {
-        document.body.setAttribute('data-theme', 'light');
-        updateChartColors(true);
-        const icon = document.getElementById('themeIcon');
-        if (icon) icon.innerText = '🌙';
-    }
-});
 
 // --- 6. 3D LATENT SPACE VISUALIZATION (Plotly.js) ---
 function renderLatentChart(latentData, targetIndex) {
