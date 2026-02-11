@@ -1,4 +1,5 @@
 import os
+import gc
 import pandas as pd
 import numpy as np
 import time
@@ -6,13 +7,19 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import PCA
-from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Dense, Input
 import google.generativeai as genai
 from scipy.stats import entropy
 from sklearn.metrics import precision_score, recall_score
 import random
 import tensorflow as tf
+
+# --- MEMORY OPTIMIZATION FOR RENDER ---
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+tf.get_logger().setLevel('ERROR')
+
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Input
+from tensorflow.keras import backend as K
 
 # --- SET SEEDS FOR REPRODUCIBILITY ---
 # --- SET SEEDS FOR REPRODUCIBILITY ---
@@ -85,8 +92,8 @@ def analyze_drift(filepath):
         # 2. SMART PREPROCESSING
         # ==========================================
         # Sample huge files
-        if len(df) > 20000:
-            df = df.head(20000)
+        if len(df) > 5000:
+            df = df.head(5000)
 
         cols_lower = {c.lower(): c for c in df.columns}
         
@@ -110,8 +117,8 @@ def analyze_drift(filepath):
         if df_processed.empty:
             return {"error": f"Invalid Data. Could not detect Case ID/Activity. Found: {list(df.columns[:5])}..."}
 
-        # Limit Traces
-        MAX_TRACES = 3000
+        # Limit Traces (reduced for Render free tier memory)
+        MAX_TRACES = 1000
         if len(df_processed) > MAX_TRACES:
             df_processed = df_processed.head(MAX_TRACES)
 
@@ -132,7 +139,7 @@ def analyze_drift(filepath):
         
         autoencoder = Model(inputs=input_layer, outputs=decoder)
         autoencoder.compile(optimizer='adam', loss='mse')
-        autoencoder.fit(scaled_data, scaled_data, epochs=5, batch_size=32, verbose=0, shuffle=False)
+        autoencoder.fit(scaled_data, scaled_data, epochs=3, batch_size=64, verbose=0, shuffle=False)
         
         # ==========================================
         # 4. DRIFT & METRICS
@@ -291,6 +298,11 @@ def analyze_drift(filepath):
             "engine": "Deep Autoencoder",
             "latent_space": latent_space_json
         }
+
+        # --- FREE MEMORY ---
+        K.clear_session()
+        del autoencoder, encoder_model, scaled_data, reconstructions, feature_errors
+        gc.collect()
         return results
 
     except Exception as e:
