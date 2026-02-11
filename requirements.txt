@@ -3,7 +3,6 @@ flask-cors==5.0.1
 pandas==2.2.3
 numpy>=1.26.4
 scikit-learn==1.6.1
-tensorflow-cpu==2.20.0
 scipy>=1.14.1
 google-generativeai==0.8.4
 python-dotenv==1.0.1

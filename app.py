@@ -7,30 +7,17 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import PCA
+from sklearn.neural_network import MLPRegressor
 import google.generativeai as genai
 from scipy.stats import entropy
 from sklearn.metrics import precision_score, recall_score
 import random
-import tensorflow as tf
-
-# --- MEMORY OPTIMIZATION FOR RENDER ---
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-tf.get_logger().setLevel('ERROR')
-
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, Input
-from tensorflow.keras import backend as K
 
 # --- SET SEEDS FOR REPRODUCIBILITY ---
-# --- SET SEEDS FOR REPRODUCIBILITY ---
-# Disable OneDNN optimizations (Must be before TF use)
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-
 SEED = 42
 os.environ['PYTHONHASHSEED'] = str(SEED)
 random.seed(SEED)
 np.random.seed(SEED)
-tf.random.set_seed(SEED)
 
 # --- 1. SETUP & CONFIGURATION ---
 from dotenv import load_dotenv
@@ -92,8 +79,8 @@ def analyze_drift(filepath):
         # 2. SMART PREPROCESSING
         # ==========================================
         # Sample huge files
-        if len(df) > 5000:
-            df = df.head(5000)
+        if len(df) > 20000:
+            df = df.head(20000)
 
         cols_lower = {c.lower(): c for c in df.columns}
         
@@ -117,15 +104,15 @@ def analyze_drift(filepath):
         if df_processed.empty:
             return {"error": f"Invalid Data. Could not detect Case ID/Activity. Found: {list(df.columns[:5])}..."}
 
-        # Limit Traces (reduced for Render free tier memory)
-        MAX_TRACES = 1000
+        # Limit Traces
+        MAX_TRACES = 3000
         if len(df_processed) > MAX_TRACES:
             df_processed = df_processed.head(MAX_TRACES)
 
         data = df_processed.values
 
         # ==========================================
-        # 3. AI MODELING
+        # 3. AI MODELING (Scikit-learn Autoencoder)
         # ==========================================
         scaler = MinMaxScaler()
         scaled_data = scaler.fit_transform(data)
@@ -133,13 +120,16 @@ def analyze_drift(filepath):
         input_dim = scaled_data.shape[1]
         encoding_dim = max(2, input_dim // 2)
         
-        input_layer = Input(shape=(input_dim,))
-        encoder = Dense(encoding_dim, activation="relu")(input_layer)
-        decoder = Dense(input_dim, activation="sigmoid")(encoder)
-        
-        autoencoder = Model(inputs=input_layer, outputs=decoder)
-        autoencoder.compile(optimizer='adam', loss='mse')
-        autoencoder.fit(scaled_data, scaled_data, epochs=3, batch_size=64, verbose=0, shuffle=False)
+        # MLPRegressor as Autoencoder: input -> hidden (encoder) -> output (decoder)
+        autoencoder = MLPRegressor(
+            hidden_layer_sizes=(encoding_dim,),
+            activation='relu',
+            solver='adam',
+            max_iter=200,
+            random_state=SEED,
+            verbose=False
+        )
+        autoencoder.fit(scaled_data, scaled_data)
         
         # ==========================================
         # 4. DRIFT & METRICS
@@ -159,9 +149,8 @@ def analyze_drift(filepath):
         # ==========================================
         # 4b. 3D LATENT SPACE VISUALIZATION
         # ==========================================
-        # Extract "Brain" features (latent representation)
-        encoder_model = Model(inputs=input_layer, outputs=encoder)
-        latent_features = encoder_model.predict(scaled_data, verbose=0)
+        # Extract latent features from hidden layer weights
+        latent_features = np.maximum(0, scaled_data @ autoencoder.coefs_[0] + autoencoder.intercepts_[0])  # ReLU
         
         # Reduce to 3D using PCA
         n_components = min(3, latent_features.shape[1])
@@ -257,7 +246,7 @@ def analyze_drift(filepath):
                 synthetic_data = synthetic_data * np.random.uniform(2.0, 5.0, synthetic_data.shape)
                 
                 # Predict on synthetic
-                syn_recon = autoencoder.predict(synthetic_data, verbose=0)
+                syn_recon = autoencoder.predict(synthetic_data)
                 syn_mse = np.mean(np.power(synthetic_data - syn_recon, 2), axis=1)
                 
                 # Check how many were caught
@@ -300,8 +289,7 @@ def analyze_drift(filepath):
         }
 
         # --- FREE MEMORY ---
-        K.clear_session()
-        del autoencoder, encoder_model, scaled_data, reconstructions, feature_errors
+        del autoencoder, scaled_data, reconstructions, feature_errors
         gc.collect()
         return results
 
@@ -333,11 +321,11 @@ def upload_file():
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
             file.save(filepath)
             
-            # Check file size (limit to 2MB for free-tier hosting)
+            # Check file size (limit to 20MB)
             file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
-            if file_size_mb > 2:
+            if file_size_mb > 20:
                 os.remove(filepath)
-                return jsonify({'error': f'File too large ({file_size_mb:.1f}MB). Max 2MB on free hosting. Please use a smaller dataset or sample your data.'})
+                return jsonify({'error': f'File too large ({file_size_mb:.1f}MB). Max 20MB allowed. Please use a smaller dataset.'})
             
             result = analyze_drift(filepath)
             
